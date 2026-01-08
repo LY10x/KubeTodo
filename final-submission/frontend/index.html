@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TODO Приложение</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            width: 100%;
+            max-width: 600px;
+            padding: 30px;
+        }
+        h1 {
+            color: #667eea;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        input[type="text"] {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        button {
+            padding: 12px 24px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.3s;
+        }
+        button:hover { background: #5568d3; }
+        .todo-list {
+            list-style: none;
+        }
+        .todo-item {
+            background: #f8f9fa;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: transform 0.2s;
+        }
+        .todo-item:hover { transform: translateX(5px); }
+        .todo-item.completed {
+            opacity: 0.6;
+            text-decoration: line-through;
+        }
+        .todo-item input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+        .todo-text {
+            flex: 1;
+            font-size: 16px;
+        }
+        .delete-btn {
+            background: #e74c3c;
+            padding: 8px 16px;
+            font-size: 14px;
+        }
+        .delete-btn:hover { background: #c0392b; }
+        .status {
+            text-align: center;
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            font-weight: bold;
+        }
+        .status.connected { background: #d4edda; color: #155724; }
+        .status.error { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📝 TODO Приложение</h1>
+        <div id="status" class="status">Зареждане...</div>
+        
+        <div class="input-group">
+            <input type="text" id="todoInput" placeholder="Въведете нова задача...">
+            <button onclick="addTodo()">Добави</button>
+        </div>
+        
+        <ul id="todoList" class="todo-list"></ul>
+    </div>
+
+    <script>
+        const API_URL = window.location.hostname === 'localhost' 
+            ? 'http://localhost:5000/api'
+            : `http://${window.location.hostname}:30001/api`;
+
+        async function checkHealth() {
+            try {
+                const response = await fetch(`${API_URL}/health`);
+                const data = await response.json();
+                document.getElementById('status').className = 'status connected';
+                document.getElementById('status').textContent = '✓ Свързан с Backend';
+            } catch (error) {
+                document.getElementById('status').className = 'status error';
+                document.getElementById('status').textContent = '✗ Грешка при свързване';
+            }
+        }
+
+        async function loadTodos() {
+            try {
+                const response = await fetch(`${API_URL}/todos`);
+                const todos = await response.json();
+                const todoList = document.getElementById('todoList');
+                todoList.innerHTML = '';
+                
+                todos.forEach(todo => {
+                    const li = document.createElement('li');
+                    li.className = `todo-item ${todo.completed ? 'completed' : ''}`;
+                    li.innerHTML = `
+                        <input type="checkbox" ${todo.completed ? 'checked' : ''} 
+                               onchange="toggleTodo('${todo._id}', ${!todo.completed})">
+                        <span class="todo-text">${todo.title}</span>
+                        <button class="delete-btn" onclick="deleteTodo('${todo._id}')">Изтрий</button>
+                    `;
+                    todoList.appendChild(li);
+                });
+            } catch (error) {
+                console.error('Error loading todos:', error);
+            }
+        }
+
+        async function addTodo() {
+            const input = document.getElementById('todoInput');
+            const title = input.value.trim();
+            
+            if (!title) return;
+            
+            try {
+                await fetch(`${API_URL}/todos`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title })
+                });
+                input.value = '';
+                loadTodos();
+            } catch (error) {
+                console.error('Error adding todo:', error);
+            }
+        }
+
+        async function toggleTodo(id, completed) {
+            try {
+                await fetch(`${API_URL}/todos/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ completed })
+                });
+                loadTodos();
+            } catch (error) {
+                console.error('Error updating todo:', error);
+            }
+        }
+
+        async function deleteTodo(id) {
+            try {
+                await fetch(`${API_URL}/todos/${id}`, { method: 'DELETE' });
+                loadTodos();
+            } catch (error) {
+                console.error('Error deleting todo:', error);
+            }
+        }
+
+        document.getElementById('todoInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') addTodo();
+        });
+
+        checkHealth();
+        loadTodos();
+        setInterval(checkHealth, 30000);
+    </script>
+</body>
+</html>
